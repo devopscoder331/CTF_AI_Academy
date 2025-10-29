@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giga Chat Web Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .chat-container {
+            padding: 30px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.bot .message-content {
+            background: #f8f9fa;
+            color: #333;
+            border-bottom-left-radius: 5px;
+        }
+
+        .input-container {
+            padding: 30px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .usage-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Chat Bot</h1>
+            <p>Попробуйте обмануть меня и получить флаг!</p>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot">
+                <div class="message-content">
+                    Привет! Я AI чат-бот. Попробуйте обмануть меня и получить флаг! Задайте мне любой вопрос.
+                </div>
+            </div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Обрабатываю ваш запрос...</p>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="input-container">
+            <div class="input-group">
+                <input type="text" 
+                       class="message-input" 
+                       id="messageInput" 
+                       placeholder="Введите ваше сообщение..."
+                       maxlength="1000">
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    Отправить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        
+        // Генерация уникального ID сессии
+        let sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        function addMessage(content, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            
+            messageDiv.appendChild(contentDiv);
+            chatContainer.appendChild(messageDiv);
+            
+            // Прокрутка к последнему сообщению
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showError(message) {
+            error.textContent = message;
+            error.classList.add('show');
+            setTimeout(() => {
+                error.classList.remove('show');
+            }, 5000);
+        }
+
+        function setLoading(show) {
+            if (show) {
+                loading.classList.add('show');
+                sendButton.disabled = true;
+                messageInput.disabled = true;
+            } else {
+                loading.classList.remove('show');
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+            }
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Добавляем сообщение пользователя
+            addMessage(message, true);
+            messageInput.value = '';
+
+            setLoading(true);
+
+            try {
+                const response = await fetch('/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        message: message,
+                        session_id: sessionId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    addMessage(data.response);
+                    // Обновляем session_id если он изменился
+                    if (data.session_id) {
+                        sessionId = data.session_id;
+                    }
+                }
+            } catch (err) {
+                showError('Ошибка соединения с сервером');
+                console.error('Error:', err);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Отправка по Enter
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Автофокус на поле ввода
+        messageInput.focus();
+    </script>
+</body>
+</html> 
