@@ -193,19 +193,65 @@ async def generate_response(message: str, session_id: str) -> str:
         
         logger.debug(f"Generating response for message: {message[:50]}...")
         
+        # Ограничиваем длину промпта до разумного размера
+        MAX_PROMPT_LENGTH = 2048  # Максимальная длина промпта
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            logger.warning(f"Prompt too long: {len(prompt)} chars, truncating...")
+            # Ограничиваем длину вопроса, оставляя место для instruction и answer
+            instruction_len = len(instruction) + 20  # instruction + "Question: ... Answer:"
+            max_message_len = MAX_PROMPT_LENGTH - instruction_len - 200  # запас на max_tokens
+            message = message[:max_message_len]
+            prompt = f"Instruction: {instruction} Question: {message} Answer:"
+            logger.info(f"Truncated message to {len(message)} chars")
+        
+        # Вычисляем max_tokens с учетом длины промпта
+        # С echo=True модель возвращает промпт + ответ, поэтому нужно учитывать оба
+        prompt_tokens = len(prompt.split())
+        # Оставляем место для ответа (максимум 500 токенов на ответ)
+        max_tokens_for_response = 500
+        # Но не превышаем общий лимит контекста
+        available_tokens = 2048 - prompt_tokens - 100  # буфер для безопасности
+        max_tokens = min(max_tokens_for_response, available_tokens)
+        
+        # Если вычисленный max_tokens слишком мал, уменьшаем длину промпта
+        if max_tokens < 50:
+            logger.warning(f"Max tokens too small ({max_tokens}), reducing prompt length")
+            # Ограничиваем длину промпта ещё больше
+            max_prompt_tokens = 1800  # резервируем 248 токенов для ответа
+            message = ' '.join(message.split()[:max_prompt_tokens])
+            prompt = f"Instruction: {instruction} Question: {message} Answer:"
+            max_tokens = 200  # фиксированный размер ответа
+        
+        logger.info(f"Prompt tokens: {len(prompt.split())}, max_tokens: {max_tokens}")
+        
         # Вызываем модель в отдельном потоке, так как Llama синхронная
+        logger.info("Starting model inference...")
         loop = asyncio.get_event_loop()
-        output = await loop.run_in_executor(
-            None,
-            lambda: llm(
-                prompt,
-                max_tokens=1000,
-                temperature=0.9,
-                stop=["\n", "Question:", "Q:"],
-                stream=False,
-                echo=True
-            )
+        
+        # Используем asyncio.wait_for для таймаута
+        def call_llm():
+            logger.info("Calling LLM model...")
+            try:
+                result = llm(
+                    prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.9,
+                    stop=["\n", "Question:", "Q:"],
+                    stream=False,
+                    echo=True
+                )
+                logger.info("LLM model returned result")
+                return result
+            except Exception as e:
+                logger.error(f"Error in LLM call: {str(e)}")
+                raise
+        
+        # Вызываем с таймаутом 240 секунд (оставляем 60 секунд на обработку)
+        output = await asyncio.wait_for(
+            loop.run_in_executor(None, call_llm),
+            timeout=240.0
         )
+        logger.info("Model inference completed")
         
         logger.debug(f"Model output type: {type(output)}")
         logger.debug(f"Model output keys: {output.keys() if isinstance(output, dict) else 'not a dict'}")
@@ -231,6 +277,9 @@ async def generate_response(message: str, session_id: str) -> str:
             logger.warning(f"Could not find 'Answer:' in response: {full_response[:200]}...")
             return "No flag for you!"
             
+    except asyncio.TimeoutError:
+        logger.error("Model inference timeout after 240 seconds")
+        return "Извините, обработка запроса заняла слишком много времени. Попробуйте сократить ваш запрос."
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}", exc_info=True)
         import traceback
