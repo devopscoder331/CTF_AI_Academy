@@ -14,6 +14,8 @@ services:
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-300}
       - SESSION_TIMEOUT=${SESSION_TIMEOUT:-3600}
       - CLEANUP_INTERVAL=${CLEANUP_INTERVAL:-300}
+      # токены для генерации ответа
+      - MAX_TOKENS=${MAX_TOKENS:-200}
     volumes:
       # Монтируем директорию с моделями
       - ${MODEL_HOST_PATH:-/home/luksa/git/AI_Workshop/ai-goat/tasks/models}:/app/models:ro
@@ -26,14 +28,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 12G
-          cpus: '4.0'
-        reservations:
-          memory: 8G
-          cpus: '2.0'
+#    deploy:
+#      resources:
+#        limits:
+#          memory: 12G
+#          cpus: '4.0'
+#        reservations:
+#          memory: 8G
+#          cpus: '2.0'
 
   frontend:
     build:
@@ -79,3 +81,4 @@ networks:
 # REQUEST_TIMEOUT=300
 # SESSION_TIMEOUT=3600
 # CLEANUP_INTERVAL=300
+# MAX_TOKENS=200

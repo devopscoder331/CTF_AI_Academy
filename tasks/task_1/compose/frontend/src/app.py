@@ -27,6 +27,9 @@ async def error_handler(request: Request, handler):
     """Middleware для обработки ошибок"""
     try:
         return await handler(request)
+    except web.HTTPException as e:
+        # HTTP исключения (404, 405 и т.д.) пробрасываем как есть
+        raise
     except Exception as e:
         logger.error(f"Unhandled error in {request.path}: {str(e)}", exc_info=True)
         return web.json_response(
